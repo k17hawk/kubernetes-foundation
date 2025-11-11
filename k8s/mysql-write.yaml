@@ -1,0 +1,122 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-primary
+  namespace: flask-mysql
+spec:
+  ports: 
+  - port: 3306
+  clusterIP: None
+  selector:
+    app: mysql-primary-stateful
+    role: primary
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql-primary
+  namespace: flask-mysql  
+spec:
+  serviceName: mysql-primary
+  replicas: 1
+  selector:
+    matchLabels: 
+      app: mysql-primary-stateful
+      role: primary
+  template:
+    metadata:
+      labels: 
+        app: mysql-primary-stateful
+        role: primary
+    spec:
+      initContainers:
+        - name: render-init-sql
+          image: bitnami/minideb:latest
+          command:
+            - sh
+            - -c
+            - |
+              apt-get update && apt-get install -y gettext-base
+              envsubst < /template/init-template.sql > /shared/init.sql
+              echo "✅ Rendered init.sql:"
+              cat /shared/init.sql
+          env:
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_PASSWORD
+            - name: MYSQL_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_DATABASE
+          volumeMounts:
+            - name: init-script-template
+              mountPath: /template
+            - name: init-script
+              mountPath: /shared
+      containers:
+        - name: mysql
+          image: bitnamilegacy/mysql:8.0.39-debian-12-r0
+          imagePullPolicy: IfNotPresent 
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_ROOT_PASSWORD
+            - name: MYSQL_REPLICATION_MODE
+              value: "master"
+            - name: MYSQL_REPLICATION_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_REPLICATION_USER
+            - name: MYSQL_REPLICATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_REPLICATION_PASSWORD
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_PASSWORD
+            - name: MYSQL_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_DATABASE
+          volumeMounts:
+            - name: data
+              mountPath: /bitnami/mysql/data
+            - name: init-script
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:  
+        - name: init-script-template
+          configMap:
+            name: mysql-init-template
+        - name: init-script
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi

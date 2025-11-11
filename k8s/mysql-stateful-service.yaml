@@ -1,0 +1,114 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-headless
+  namespace: flask-mysql
+spec:
+  clusterIP: None
+  selector:
+    app: mysql-stateful
+  ports:
+  - port: 3306
+    targetPort: 3306
+
+---
+apiVersion: apps/v1  
+kind: StatefulSet    
+metadata:
+  name: mysql-stateful
+  namespace: flask-mysql
+spec:
+  serviceName: mysql-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql-stateful
+  template:
+    metadata:
+      labels:
+        app: mysql-stateful
+    spec:
+      initContainers:
+      - name: render-init-sql
+        image: busybox:latest
+        command:
+        - sh
+        - -c
+        - |
+          sed -e "s/\${MYSQL_USER}/$MYSQL_USER/g" \
+              -e "s/\${MYSQL_PASSWORD}/$MYSQL_PASSWORD/g" \
+              -e "s/\${MYSQL_DATABASE}/$MYSQL_DATABASE/g" \
+              /template/init-template.sql > /shared/init.sql
+          echo "Generated init.sql:"
+          cat /shared/init.sql
+        env:
+        - name: MYSQL_USER
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: MYSQL_USER
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: MYSQL_PASSWORD
+        - name: MYSQL_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: MYSQL_DATABASE
+        volumeMounts:
+        - name: init-script-template
+          mountPath: /template
+        - name: init-script
+          mountPath: /shared
+
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: MYSQL_ROOT_PASSWORD
+        - name: MYSQL_USER
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: MYSQL_USER
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: MYSQL_PASSWORD
+        - name: MYSQL_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: MYSQL_DATABASE
+        ports:
+        - containerPort: 3306
+        volumeMounts:
+        - name: mysql-data
+          mountPath: /var/lib/mysql
+        - name: init-script-template
+          mountPath: /template
+          readOnly: true
+        - name: init-script
+          mountPath: /docker-entrypoint-initdb.d
+      volumes:
+      - name: init-script-template
+        configMap:
+          name: mysql-init-template
+      - name: init-script
+        emptyDir: {}
+  
+  volumeClaimTemplates:
+  - metadata:
+      name: mysql-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
