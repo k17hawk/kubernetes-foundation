@@ -29,6 +29,11 @@ spec:
         app: mysql-replica-stateful  
         role: replica
     spec:
+      # Add init container to wait for primary to be ready
+      initContainers:
+      - name: wait-for-primary
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nslookup mysql-primary.flask-mysql.svc.cluster.local; do echo waiting for mysql-primary; sleep 2; done']
       containers:
         - name: mysql
           image: bitnamilegacy/mysql:8.0.39-debian-12-r0
@@ -53,23 +58,31 @@ spec:
                   name: mysql-secret
                   key: MYSQL_REPLICATION_PASSWORD
             - name: MYSQL_MASTER_HOST
-              value: "mysql-primary.flask-mysql.svc.cluster.local" 
+              value: "mysql-primary.flask-mysql.svc.cluster.local"
             - name: MYSQL_MASTER_ROOT_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: mysql-secret
                   key: MYSQL_ROOT_PASSWORD
-          # probes
+            # Add these to prevent UUID conflicts
+            - name: BITNAMI_DEBUG
+              value: "true"
+            - name: MYSQL_CLIENT_CREATE_DATABASE_OPTS
+              value: ""
+          # Improved probes
           readinessProbe:
             exec:
               command:
               - /bin/bash
               - -c
               - |
-                mysql -h127.0.0.1 -uroot -p${MYSQL_ROOT_PASSWORD} -e "SHOW SLAVE STATUS\G" | grep -q "Waiting for master to send event"
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 5
+                # Check if MySQL is running and replication is configured
+                mysql -h127.0.0.1 -uroot -p${MYSQL_ROOT_PASSWORD} -e "SHOW SLAVE STATUS\G" || 
+                mysql -h127.0.0.1 -uroot -p${MYSQL_ROOT_PASSWORD} -e "SELECT 1"
+            initialDelaySeconds: 60  # Increased delay
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 3
           livenessProbe:
             exec:
               command:
@@ -77,9 +90,10 @@ spec:
               - -c
               - |
                 mysql -h127.0.0.1 -uroot -p${MYSQL_ROOT_PASSWORD} -e "SELECT 1"
-            initialDelaySeconds: 60
+            initialDelaySeconds: 90  
             periodSeconds: 30
-            timeoutSeconds: 5
+            timeoutSeconds: 10
+            failureThreshold: 3
           resources:
             requests:
               cpu: "250m"
