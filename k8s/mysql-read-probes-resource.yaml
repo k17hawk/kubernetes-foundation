@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: 
+  name: mysql-replica
+  namespace: flask-mysql
+spec:
+  replicas: 2
+  serviceName: mysql-replica
+  selector:
+    matchLabels:
+      app: mysql-replica-stateful
+      role: replica
+  template:
+    metadata:
+      labels: 
+        app: mysql-replica-stateful  
+        role: replica
+    spec:
+      containers:
+        - name: mysql
+          image: bitnamilegacy/mysql:8.0.39-debian-12-r0
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_ROOT_PASSWORD
+            - name: MYSQL_REPLICATION_MODE
+              value: "slave"
+            - name: MYSQL_REPLICATION_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_REPLICATION_USER
+            - name: MYSQL_REPLICATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_REPLICATION_PASSWORD
+            - name: MYSQL_MASTER_HOST
+              value: "mysql-primary.flask-mysql.svc.cluster.local" 
+            - name: MYSQL_MASTER_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_ROOT_PASSWORD
+          # probes
+          readinessProbe:
+            exec:
+              command:
+              - /bin/bash
+              - -c
+              - |
+                mysql -h127.0.0.1 -uroot -p${MYSQL_ROOT_PASSWORD} -e "SHOW SLAVE STATUS\G" | grep -q "Waiting for master to send event"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+              - /bin/bash
+              - -c
+              - |
+                mysql -h127.0.0.1 -uroot -p${MYSQL_ROOT_PASSWORD} -e "SELECT 1"
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          volumeMounts:
+            - name: data
+              mountPath: /bitnami/mysql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
