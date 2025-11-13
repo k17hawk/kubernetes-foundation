@@ -4,7 +4,7 @@ metadata:
   name: flask-app
   namespace: flask-mysql
 spec:
-  replicas: 1
+  replicas: 3 
   selector:
     matchLabels: 
       app: flask-app
@@ -19,7 +19,7 @@ spec:
           command: ['sh', '-c', 'until nc -z mysql-primary.flask-mysql.svc.cluster.local 3306; do echo waiting for mysql primary; sleep 2; done;']
         - name: wait-for-mysql-replica
           image: busybox:1.28
-          command: ['sh', '-c', 'until nc -z mysql-replica.flask-mysql.svc.cluster.local 3306; do echo waiting for mysql replica; sleep 2; done;']
+          command: ['sh', '-c', 'until nc -z mysql-replica-0.mysql-replica.flask-mysql.svc.cluster.local 3306; do echo waiting for mysql replica; sleep 2; done;']
       
       containers:
         - name: flask-app
@@ -32,12 +32,12 @@ spec:
               cpu: 100m
               memory: 128Mi
             limits:
-              cpu: 200m
-              memory: 256Mi
+              cpu: 500m 
+              memory: 512Mi
           env:
             - name: MYSQL_PRIMARY_HOST
               value: "mysql-primary.flask-mysql.svc.cluster.local"
-            - name: MYSQL_REPLICA_HOST
+            - name: MYSQL_REPLICA_SERVICE
               value: "mysql-replica.flask-mysql.svc.cluster.local"
             - name: MYSQL_USER           
               valueFrom:
