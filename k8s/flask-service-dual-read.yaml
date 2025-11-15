@@ -30,7 +30,7 @@ spec:
       
       containers:
         - name: flask-app
-          image: my-flask-image:latest
+          image: updated-test-flask-image:latest
           imagePullPolicy: Never
           ports:
             - containerPort: 5000

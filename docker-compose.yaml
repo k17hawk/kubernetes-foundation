@@ -23,7 +23,7 @@ services:
 
   flask-app:
     build: .
-    image: my-flask-image
+    image: updated-test-flask-image
     container_name: my-flask-app
     ports:
       - "5000:5000"
