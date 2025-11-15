@@ -7,7 +7,12 @@ import random
 import string
 from datetime import datetime
 
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+import time
+
 app = Flask(__name__)
+
+
 
 # --- Logging startup info ---
 print("=== Flask App Starting ===", file=sys.stderr)
@@ -38,23 +43,54 @@ MYSQL_REPLICA_CONFIG = {
 }
 
 
+# Add these metrics at the top of your app.py (after imports)
+REQUEST_COUNT = Counter('flask_http_requests_total', 'Total HTTP Requests', ['method', 'endpoint', 'status'])
+REQUEST_LATENCY = Histogram('flask_http_request_duration_seconds', 'HTTP request latency', ['method', 'endpoint'])
+DB_CONNECTION_COUNT = Counter('flask_db_connections_total', 'Total DB connections', ['db_type', 'status'])
+DB_QUERY_COUNT = Counter('flask_db_queries_total', 'Total DB queries', ['operation'])
+
+
+@app.before_request
+def before_request():
+    request.start_time = time.time()
+
+@app.after_request
+def after_request(response):
+    # Calculate request latency
+    latency = time.time() - request.start_time
+    REQUEST_LATENCY.labels(request.method, request.path).observe(latency)
+    
+    # Count requests
+    REQUEST_COUNT.labels(request.method, request.path, response.status_code).inc()
+    
+    return response
+
+# Add a metrics endpoint
+@app.route('/metrics')
+def metrics():
+    return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
+
+
 def get_db_connection(use_primary=False):
-    """Create and return MySQL connection"""
+    """Create and return MySQL connection with metrics"""
     config = MYSQL_PRIMARY_CONFIG if use_primary else MYSQL_REPLICA_CONFIG
-    connection_type = "PRIMARY" if use_primary else "REPLICA"
+    connection_type = "primary" if use_primary else "replica"
 
     try:
         print(f"Attempting MySQL {connection_type} connection to {config['host']}", file=sys.stderr)
         connection = mysql.connector.connect(**config)
+        DB_CONNECTION_COUNT.labels(db_type=connection_type, status='success').inc()
         print(f"✅ MySQL {connection_type} connection established", file=sys.stderr)
         return connection
     except mysql.connector.Error as err:
+        DB_CONNECTION_COUNT.labels(db_type=connection_type, status='error').inc()
         print(f"❌ MySQL {connection_type} connection error: {err}", file=sys.stderr)
         if not use_primary:
             print("🔄 Falling back to PRIMARY connection", file=sys.stderr)
             return get_db_connection(use_primary=True)
         return None
     except Exception as e:
+        DB_CONNECTION_COUNT.labels(db_type=connection_type, status='error').inc()
         print(f"❌ Unexpected error: {e}", file=sys.stderr)
         return None
 
@@ -143,6 +179,7 @@ def add_message(message):
     if connection:
         try:
             cursor = connection.cursor()
+            DB_QUERY_COUNT.labels(operation='insert').inc()
             cursor.execute("INSERT INTO messages (message) VALUES (%s)", (message,))
             connection.commit()
             cursor.close()
