@@ -11,6 +11,15 @@ spec:
     app: mysql-replica-stateful
     role: replica
 ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mysql-replica-sa
+  namespace: flask-mysql
+  labels:
+    app: mysql-replica
+    role: replica
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata: 
@@ -29,7 +38,7 @@ spec:
         app: mysql-replica-stateful  
         role: replica
     spec:
-      # Add init container to wait for primary to be ready
+      serviceAccountName: mysql-replica-sa  # ← MOVED: This belongs in template.spec
       initContainers:
       - name: wait-for-primary
         image: busybox:1.35
@@ -76,21 +85,36 @@ spec:
               - /bin/bash
               - -c
               - |
-                # Check if MySQL is running and replication is configured
-                mysql -h127.0.0.1 -uroot -p${MYSQL_ROOT_PASSWORD} -e "SHOW SLAVE STATUS\G" || 
-                mysql -h127.0.0.1 -uroot -p${MYSQL_ROOT_PASSWORD} -e "SELECT 1"
-            initialDelaySeconds: 60  # Increased delay
+                # Check basic MySQL connectivity
+                if ! mysql -h127.0.0.1 -uroot -p${MYSQL_ROOT_PASSWORD} -e "SELECT 1" > /dev/null 2>&1; then
+                  exit 1
+                fi
+                
+                # Check replication status - must have both conditions
+                result=$(mysql -h127.0.0.1 -uroot -p${MYSQL_ROOT_PASSWORD} -e "SHOW SLAVE STATUS\G" 2>/dev/null | grep -E "(Slave_IO_Running:|Slave_SQL_Running:)" | tr -d ' ')
+                
+                io_running=$(echo "$result" | grep "Slave_IO_Running:" | cut -d: -f2)
+                sql_running=$(echo "$result" | grep "Slave_SQL_Running:" | cut -d: -f2)
+                
+                # Only ready if both IO and SQL threads are running
+                if [ "$io_running" = "Yes" ] && [ "$sql_running" = "Yes" ]; then
+                  exit 0
+                else
+                  exit 1
+                fi
+            initialDelaySeconds: 60
             periodSeconds: 15
             timeoutSeconds: 10
             failureThreshold: 3
+
           livenessProbe:
             exec:
               command:
               - /bin/bash
               - -c
               - |
-                mysql -h127.0.0.1 -uroot -p${MYSQL_ROOT_PASSWORD} -e "SELECT 1"
-            initialDelaySeconds: 90  
+                mysql -h127.0.0.1 -uroot -p${MYSQL_ROOT_PASSWORD} -e "SELECT 1" > /dev/null 2>&1
+            initialDelaySeconds: 90
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 3

@@ -10,7 +10,15 @@ spec:
   selector:
     app: mysql-primary-stateful
     role: primary
-
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mysql-primary-sa  # ← FIXED: lowercase name
+  namespace: flask-mysql
+  labels:
+    app: mysql-primary
+    role: primary
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -30,6 +38,7 @@ spec:
         app: mysql-primary-stateful
         role: primary
     spec:
+      serviceAccountName: mysql-primary-sa  # ← MOVED: This belongs in template.spec
       initContainers:
         - name: render-init-sql
           image: bitnami/minideb:latest
