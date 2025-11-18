@@ -1,0 +1,404 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-configs
+  namespace: flask-mysql
+data:
+  flask-app-monitoring.json: |
+    {
+      "uid": "flask-app-monitoring",
+      "title": "Flask Application Monitoring",
+      "tags": ["flask", "application"],
+      "timezone": "browser",
+      "schemaVersion": 16,
+      "version": 0,
+      "refresh": "10s",
+      "panels": [
+        {
+          "id": 1,
+          "title": "HTTP Request Rate",
+          "type": "graph",
+          "targets": [
+            {
+              "expr": "rate(flask_http_requests_total[5m])",
+              "legendFormat": "{{method}} {{endpoint}} {{status}}",
+              "refId": "A"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "color": {"mode": "palette-classic"}
+            }
+          }
+        },
+        {
+          "id": 2,
+          "title": "Request Duration (95th percentile)",
+          "type": "graph",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, rate(flask_http_request_duration_seconds_bucket[5m]))",
+              "legendFormat": "{{method}} {{endpoint}}",
+              "refId": "A"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "color": {"mode": "palette-classic"}
+            }
+          }
+        },
+        {
+          "id": 3,
+          "title": "MySQL Connection Status",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "mysql_connection_status",
+              "legendFormat": "{{host}} {{type}}",
+              "refId": "A"
+            }
+          ],
+          "gridPos": {"h": 6, "w": 8, "x": 0, "y": 8},
+          "fieldConfig": {
+            "defaults": {
+              "color": {"mode": "thresholds"},
+              "thresholds": {
+                "steps": [
+                  {"color": "red", "value": null},
+                  {"color": "green", "value": 1}
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": 4,
+          "title": "Message Count",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "flask_messages_total",
+              "legendFormat": "Total Messages",
+              "refId": "A"
+            }
+          ],
+          "gridPos": {"h": 6, "w": 8, "x": 8, "y": 8},
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": {"mode": "continuous-BlPu"}
+            }
+          }
+        },
+        {
+          "id": 5,
+          "title": "Active Requests",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "flask_requests_active",
+              "legendFormat": "Active Requests",
+              "refId": "A"
+            }
+          ],
+          "gridPos": {"h": 6, "w": 8, "x": 16, "y": 8},
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": {"mode": "continuous-BlPu"}
+            }
+          }
+        },
+        {
+          "id": 6,
+          "title": "Database Connections",
+          "type": "graph",
+          "targets": [
+            {
+              "expr": "rate(flask_db_connections_total[5m])",
+              "legendFormat": "{{db_type}} {{status}}",
+              "refId": "A"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
+          "fieldConfig": {
+            "defaults": {
+              "unit": "cps",
+              "color": {"mode": "palette-classic"}
+            }
+          }
+        },
+        {
+          "id": 7,
+          "title": "Database Query Rate",
+          "type": "graph",
+          "targets": [
+            {
+              "expr": "rate(flask_db_queries_total[5m])",
+              "legendFormat": "{{operation}} {{db_type}}",
+              "refId": "A"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "color": {"mode": "palette-classic"}
+            }
+          }
+        },
+        {
+          "id": 8,
+          "title": "Read/Write Operations",
+          "type": "graph",
+          "targets": [
+            {
+              "expr": "rate(write_operations_total[5m])",
+              "legendFormat": "Write Ops",
+              "refId": "A"
+            },
+            {
+              "expr": "rate(read_operations_total[5m])",
+              "legendFormat": "Read Ops ({{source}})",
+              "refId": "B"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22},
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "color": {"mode": "palette-classic"}
+            }
+          }
+        }
+      ],
+      "time": {"from": "now-1h", "to": "now"}
+    }
+  
+  mysql-replication-details.json: |
+    {
+      "uid": "mysql-replication-details",
+      "title": "MySQL Replication Details",
+      "tags": ["mysql", "replication", "details"],
+      "timezone": "browser",
+      "schemaVersion": 16,
+      "version": 0,
+      "refresh": "10s",
+      "panels": [
+        {
+          "id": 1,
+          "title": "Replica IO Thread Status",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "mysql_slave_status_slave_io_running",
+              "legendFormat": "{{instance}}",
+              "refId": "A"
+            }
+          ],
+          "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0},
+          "fieldConfig": {
+            "defaults": {
+              "color": {"mode": "thresholds"},
+              "thresholds": {
+                "steps": [
+                  {"color": "red", "value": null},
+                  {"color": "green", "value": 1}
+                ]
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {"text": "No"},
+                    "1": {"text": "Yes"}
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": 2,
+          "title": "Replica SQL Thread Status",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "mysql_slave_status_slave_sql_running",
+              "legendFormat": "{{instance}}",
+              "refId": "A"
+            }
+          ],
+          "gridPos": {"h": 6, "w": 6, "x": 6, "y": 0},
+          "fieldConfig": {
+            "defaults": {
+              "color": {"mode": "thresholds"},
+              "thresholds": {
+                "steps": [
+                  {"color": "red", "value": null},
+                  {"color": "green", "value": 1}
+                ]
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "0": {"text": "No"},
+                    "1": {"text": "Yes"}
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": 3,
+          "title": "Replication Lag History",
+          "type": "graph",
+          "targets": [
+            {
+              "expr": "mysql_slave_status_seconds_behind_master",
+              "legendFormat": "{{instance}}",
+              "refId": "A"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "color": {"mode": "palette-classic"}
+            }
+          }
+        },
+        {
+          "id": 4,
+          "title": "Bytes Transferred",
+          "type": "graph",
+          "targets": [
+            {
+              "expr": "rate(mysql_slave_status_bytes_received[5m])",
+              "legendFormat": "{{instance}} Bytes/sec",
+              "refId": "A"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+          "fieldConfig": {
+            "defaults": {
+              "unit": "Bps",
+              "color": {"mode": "palette-classic"}
+            }
+          }
+        }
+      ],
+      "time": {"from": "now-1h", "to": "now"}
+    }
+  
+  mysql-replication-overview.json: |
+    {
+      "uid": "mysql-replication-overview",
+      "title": "MySQL Replication Overview",
+      "tags": ["mysql", "replication"],
+      "timezone": "browser",
+      "schemaVersion": 16,
+      "version": 0,
+      "refresh": "10s",
+      "panels": [
+        {
+          "id": 1,
+          "title": "MySQL Instance Status",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "up{job=~\"mysql-primary|mysql-replica\"}",
+              "legendFormat": "{{job}}",
+              "refId": "A"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "fieldConfig": {
+            "defaults": {
+              "color": {"mode": "thresholds"},
+              "thresholds": {
+                "steps": [
+                  {"color": "red", "value": null},
+                  {"color": "green", "value": 1}
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": 2,
+          "title": "Replication Lag (Seconds)",
+          "type": "graph",
+          "targets": [
+            {
+              "expr": "mysql_slave_status_seconds_behind_master",
+              "legendFormat": "{{instance}}",
+              "refId": "A"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "color": {"mode": "palette-classic"}
+            }
+          }
+        },
+        {
+          "id": 3,
+          "title": "Active Connections",
+          "type": "graph",
+          "targets": [
+            {
+              "expr": "mysql_global_status_threads_connected{instance=~\"mysql-exporter-primary.*\"}",
+              "legendFormat": "Primary",
+              "refId": "A"
+            },
+            {
+              "expr": "mysql_global_status_threads_connected{instance=~\"mysql-exporter-replica.*\"}",
+              "legendFormat": "Replica",
+              "refId": "B"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": {"mode": "palette-classic"}
+            }
+          }
+        },
+        {
+          "id": 4,
+          "title": "Query Operations",
+          "type": "graph",
+          "targets": [
+            {
+              "expr": "rate(mysql_global_status_questions{instance=~\"mysql-exporter-primary.*\"}[5m])",
+              "legendFormat": "Primary Queries",
+              "refId": "A"
+            },
+            {
+              "expr": "rate(mysql_global_status_questions{instance=~\"mysql-exporter-replica.*\"}[5m])",
+              "legendFormat": "Replica Queries",
+              "refId": "B"
+            }
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "color": {"mode": "palette-classic"}
+            }
+          }
+        }
+      ],
+      "time": {"from": "now-1h", "to": "now"}
+    }

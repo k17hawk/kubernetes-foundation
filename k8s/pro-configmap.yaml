@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: flask-mysql
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    scrape_configs:
+      # Flask Application
+      - job_name: 'flask-app'
+        static_configs:
+          - targets: ['flask-app.flask-mysql.svc.cluster.local:5000']
+        metrics_path: /metrics
+        scrape_interval: 10s
+
+      # MySQL Primary
+      - job_name: 'mysql-primary'
+        static_configs:
+          - targets: ['mysql-exporter-primary.flask-mysql.svc.cluster.local:9104']
+            labels:
+              instance_type: 'primary'
+        scrape_interval: 15s
+
+      # MySQL Replica
+      - job_name: 'mysql-replica'
+        static_configs:
+          - targets: ['mysql-exporter-replica.flask-mysql.svc.cluster.local:9104']
+            labels:
+              instance_type: 'replica'
+        scrape_interval: 15s
+
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']

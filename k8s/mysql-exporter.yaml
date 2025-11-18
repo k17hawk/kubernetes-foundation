@@ -1,0 +1,179 @@
+---
+# PRIMARY EXPORTER
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysql-exporter-primary-secret
+  namespace: flask-mysql
+type: Opaque
+stringData:
+  datasource: "exporter:exporter123@tcp(mysql-primary.flask-mysql.svc.cluster.local:3306)/"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-exporter-primary-config
+  namespace: flask-mysql
+data:
+  .my.cnf: |
+    [client]
+    user=exporter
+    password=exporter123
+    host=mysql-primary.flask-mysql.svc.cluster.local
+    port=3306
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-exporter-primary
+  namespace: flask-mysql
+  labels:
+    app: mysql-exporter-primary
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9104
+    targetPort: 9104
+    protocol: TCP
+  selector:
+    app: mysql-exporter-primary
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-exporter-primary
+  namespace: flask-mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql-exporter-primary
+  template:
+    metadata:
+      labels:
+        app: mysql-exporter-primary
+        database: primary
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9104"
+    spec:
+      containers:
+      - name: mysql-exporter
+        image: prom/mysqld-exporter:v0.15.0
+        args:
+          - "--config.my-cnf=/etc/.my.cnf"
+        ports:
+        - containerPort: 9104
+        env:
+        - name: DATA_SOURCE_NAME
+          valueFrom:
+            secretKeyRef:
+              name: mysql-exporter-primary-secret
+              key: datasource
+        volumeMounts:
+        - name: config
+          mountPath: /etc/.my.cnf
+          subPath: .my.cnf
+          readOnly: true
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: config
+        configMap:
+          name: mysql-exporter-primary-config
+
+---
+# REPLICA EXPORTER
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysql-exporter-replica-secret
+  namespace: flask-mysql
+type: Opaque
+stringData:
+  datasource: "exporter:exporter123@tcp(mysql-replica.flask-mysql.svc.cluster.local:3306)/"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-exporter-replica-config
+  namespace: flask-mysql
+data:
+  .my.cnf: |
+    [client]
+    user=exporter
+    password=exporter123
+    host=mysql-replica.flask-mysql.svc.cluster.local
+    port=3306
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-exporter-replica
+  namespace: flask-mysql
+  labels:
+    app: mysql-exporter-replica
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9104
+    targetPort: 9104
+    protocol: TCP
+  selector:
+    app: mysql-exporter-replica
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-exporter-replica
+  namespace: flask-mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql-exporter-replica
+  template:
+    metadata:
+      labels:
+        app: mysql-exporter-replica
+        database: replica
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9104"
+    spec:
+      containers:
+      - name: mysql-exporter
+        image: prom/mysqld-exporter:v0.15.0
+        args:
+          - "--config.my-cnf=/etc/.my.cnf"
+        ports:
+        - containerPort: 9104
+        env:
+        - name: DATA_SOURCE_NAME
+          valueFrom:
+            secretKeyRef:
+              name: mysql-exporter-replica-secret
+              key: datasource
+        volumeMounts:
+        - name: config
+          mountPath: /etc/.my.cnf
+          subPath: .my.cnf
+          readOnly: true
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: config
+        configMap:
+          name: mysql-exporter-replica-config

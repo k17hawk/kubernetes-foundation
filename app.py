@@ -7,7 +7,7 @@ import random
 import string
 from datetime import datetime
 
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import Counter, Histogram, generate_latest,Gauge, CONTENT_TYPE_LATEST
 import time
 
 app = Flask(__name__)
@@ -46,16 +46,48 @@ MYSQL_REPLICA_CONFIG = {
 # Add these metrics at the top of your app.py (after imports)
 REQUEST_COUNT = Counter('flask_http_requests_total', 'Total HTTP Requests', ['method', 'endpoint', 'status'])
 REQUEST_LATENCY = Histogram('flask_http_request_duration_seconds', 'HTTP request latency', ['method', 'endpoint'])
+
 DB_CONNECTION_COUNT = Counter('flask_db_connections_total', 'Total DB connections', ['db_type', 'status'])
-DB_QUERY_COUNT = Counter('flask_db_queries_total', 'Total DB queries', ['operation'])
+DB_CONNECTION_GAUGE = Gauge('flask_db_connections_active', 'Active DB connections', ['db_type'])
+
+
+MYSQL_CONNECTION_GAUGE = Gauge('mysql_connection_status', 'MySQL connection status', ['host', 'type'])
+
+# 3. Database Query Metrics
+DB_QUERY_COUNT = Counter('flask_db_queries_total', 'Total DB queries', ['operation', 'db_type'])
+DB_QUERY_DURATION = Histogram('flask_db_query_duration_seconds', 'Database query duration', ['operation', 'db_type'])
+
+# 4. Application Performance Metrics
+APP_START_TIME = Gauge('flask_app_start_timestamp', 'Application start time')
+BULK_OPERATION_DURATION = Histogram('flask_bulk_operation_duration_seconds', 'Bulk operation duration', ['operation_type'])
+
+# 5. Business Logic Metrics
+MESSAGES_COUNT = Gauge('flask_messages_total', 'Total number of messages in database')
+WRITE_OPERATIONS = Counter('write_operations_total', 'Total write operations')
+READ_OPERATIONS = Counter('read_operations_total', 'Total read operations', ['source'])
+
+ACTIVE_REQUESTS = Gauge('flask_requests_active', 'Active requests')
+
+# Set app start time
+APP_START_TIME.set_to_current_time()
+
+# Track active requests
+active_requests = 0
 
 
 @app.before_request
 def before_request():
+    global active_requests
+    active_requests += 1
+    ACTIVE_REQUESTS.set(active_requests)
     request.start_time = time.time()
 
 @app.after_request
 def after_request(response):
+    global active_requests
+    active_requests -= 1
+    ACTIVE_REQUESTS.set(active_requests)
+    
     # Calculate request latency
     latency = time.time() - request.start_time
     REQUEST_LATENCY.labels(request.method, request.path).observe(latency)
@@ -65,11 +97,72 @@ def after_request(response):
     
     return response
 
+
+def execute_query(cursor, query, params=None, operation='select', db_type='replica'):
+    start_time = time.time()
+    try:
+        if params:
+            cursor.execute(query, params)
+        else:
+            cursor.execute(query)
+        
+        DB_QUERY_DURATION.labels(operation=operation, db_type=db_type).observe(time.time() - start_time)
+        DB_QUERY_COUNT.labels(operation=operation, db_type=db_type).inc()
+        return True
+    except Exception as e:
+        DB_QUERY_DURATION.labels(operation=operation, db_type=db_type).observe(time.time() - start_time)
+        DB_QUERY_COUNT.labels(operation=operation, db_type=db_type).inc()
+        raise e
+
+# Add this function to track message count
+def update_message_count_metric():
+    connection = get_db_connection(use_primary=False)
+    if connection:
+        try:
+            cursor = connection.cursor()
+            cursor.execute("SELECT COUNT(*) FROM messages")
+            count = cursor.fetchone()[0]
+            MESSAGES_COUNT.set(count)
+            cursor.close()
+            connection.close()
+        except Exception as e:
+            print(f"Error updating message count metric: {e}")
+
 # Add a metrics endpoint
 @app.route('/metrics')
 def metrics():
+    """Expose Prometheus metrics"""
+    # Update MySQL connection status
+    try:
+        primary_conn = get_db_connection(use_primary=True)
+        MYSQL_CONNECTION_GAUGE.labels(host=MYSQL_PRIMARY_CONFIG['host'], type='primary').set(1 if primary_conn else 0)
+        if primary_conn:
+            primary_conn.close()
+    except:
+        MYSQL_CONNECTION_GAUGE.labels(host=MYSQL_PRIMARY_CONFIG['host'], type='primary').set(0)
+    
+    try:
+        replica_conn = get_db_connection(use_primary=False)
+        MYSQL_CONNECTION_GAUGE.labels(host=MYSQL_REPLICA_CONFIG['host'], type='replica').set(1 if replica_conn else 0)
+        if replica_conn:
+            replica_conn.close()
+    except:
+        MYSQL_CONNECTION_GAUGE.labels(host=MYSQL_REPLICA_CONFIG['host'], type='replica').set(0)
+    
+    # Update message count
+    try:
+        connection = get_db_connection(use_primary=False)
+        if connection:
+            cursor = connection.cursor()
+            cursor.execute("SELECT COUNT(*) FROM messages")
+            count = cursor.fetchone()[0]
+            MESSAGES_COUNT.set(count)
+            cursor.close()
+            connection.close()
+    except:
+        MESSAGES_COUNT.set(0)
+    
     return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
-
 
 def get_db_connection(use_primary=False):
     """Create and return MySQL connection with metrics"""
@@ -179,7 +272,7 @@ def add_message(message):
     if connection:
         try:
             cursor = connection.cursor()
-            DB_QUERY_COUNT.labels(operation='insert').inc()
+            DB_QUERY_COUNT.labels(operation='insert', db_type='primary').inc()
             cursor.execute("INSERT INTO messages (message) VALUES (%s)", (message,))
             connection.commit()
             cursor.close()
@@ -189,7 +282,6 @@ def add_message(message):
             return f'Error inserting into database: {err}'
     return 'Cannot connect to MySQL database'
 
-
 @app.route('/clear')
 def clear_messages():
     print("POST /clear request received - using WRITE primary", file=sys.stderr)
@@ -197,6 +289,8 @@ def clear_messages():
     if connection:
         try:
             cursor = connection.cursor()
+
+            DB_QUERY_COUNT.labels(operation='delete', db_type='primary').inc()
             cursor.execute("DELETE FROM messages")
             connection.commit()
             count = cursor.rowcount

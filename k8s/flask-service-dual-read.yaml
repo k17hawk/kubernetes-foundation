@@ -10,8 +10,14 @@ metadata:
 apiVersion: v1
 kind: Service
 metadata:
-  name: flask-service
+  name: flask-app  
   namespace: flask-mysql
+  labels:
+    app: flask-app
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "5000"
+    prometheus.io/path: "/metrics"
 spec:
   selector:
     app: flask-app

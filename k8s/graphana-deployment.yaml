@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: flask-mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      securityContext:
+        fsGroup: 472
+        runAsGroup: 472
+        runAsUser: 472
+      initContainers:
+      - name: fix-permissions
+        image: busybox
+        command: ['sh', '-c', 'chown -R 472:472 /var/lib/grafana && chmod -R 755 /var/lib/grafana']
+        volumeMounts:
+        - name: grafana-storage
+          mountPath: /var/lib/grafana
+        securityContext:
+          runAsUser: 0  # THIS IS CRITICAL - Init container must run as root
+      containers:
+      - name: grafana
+        image: grafana/grafana:10.2.0
+        ports:
+        - containerPort: 3000
+        env:
+        - name: GF_SECURITY_ADMIN_USER
+          value: "admin"
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          value: "admin123"
+        - name: GF_USERS_ALLOW_SIGN_UP
+          value: "false"
+        - name: GF_DATABASE_TYPE
+          value: "sqlite3"
+        - name: GF_DATABASE_LOCKING_MODE
+          value: "none"
+        - name: GF_DATABASE_MAX_OPEN_CONN
+          value: "100"
+        - name: GF_DATABASE_MAX_IDLE_CONN
+          value: "100"
+        - name: GF_DATABASE_CONN_MAX_LIFETIME
+          value: "14400"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        volumeMounts:
+        - name: grafana-storage
+          mountPath: /var/lib/grafana
+        - name: grafana-dashboards
+          mountPath: /etc/grafana/provisioning/dashboards
+          readOnly: true
+        - name: grafana-datasources
+          mountPath: /etc/grafana/provisioning/datasources
+          readOnly: true
+        - name: grafana-dashboard-configs
+          mountPath: /etc/dashboards
+          readOnly: true
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 5
+          timeoutSeconds: 3
+      volumes:
+      - name: grafana-storage
+        persistentVolumeClaim:
+          claimName: grafana-pvc
+      - name: grafana-dashboards
+        configMap:
+          name: grafana-dashboards
+      - name: grafana-datasources
+        configMap:
+          name: grafana-datasources
+      - name: grafana-dashboard-configs
+        configMap:
+          name: grafana-dashboard-configs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: flask-mysql
+spec:
+  selector:
+    app: grafana
+  ports:
+  - port: 3000
+    targetPort: 3000
+    nodePort: 30009
+  type: NodePort

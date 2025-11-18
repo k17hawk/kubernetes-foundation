@@ -14,7 +14,7 @@ spec:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: mysql-primary-sa  # ← FIXED: lowercase name
+  name: mysql-primary-sa  
   namespace: flask-mysql
   labels:
     app: mysql-primary

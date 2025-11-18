@@ -1,0 +1,152 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: flask-mysql
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+    - name: 'default'
+      orgId: 1
+      folder: ''
+      type: file
+      disableDeletion: false
+      editable: true
+      updateIntervalSeconds: 10
+      allowUiUpdates: true
+      options:
+        path: /etc/grafana/provisioning/dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: flask-mysql
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+    - name: Prometheus
+      type: prometheus
+      url: http://prometheus.flask-mysql.svc.cluster.local:9090
+      access: proxy
+      isDefault: true
+      editable: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-configs
+  namespace: flask-mysql
+data:
+  mysql-replication-overview.json: |-
+    {
+      "dashboard": {
+        "id": null,
+        "title": "MySQL Replication Overview",
+        "tags": ["mysql", "replication"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "MySQL Instance Status",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "up{job=~\"mysql-exporter-primary|mysql-exporter-replica\"}",
+                "legendFormat": "{{job}}",
+                "refId": "A"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+            "fieldConfig": {
+              "defaults": {
+                "color": {"mode": "thresholds"},
+                "thresholds": {
+                  "steps": [
+                    {"color": "red", "value": null},
+                    {"color": "green", "value": 1}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 2,
+            "title": "Replication Lag (Seconds)",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "mysql_slave_status_seconds_behind_master",
+                "legendFormat": "{{instance}}",
+                "refId": "A"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+            "fieldConfig": {
+              "defaults": {
+                "unit": "s",
+                "color": {"mode": "palette-classic"}
+              }
+            }
+          }
+        ],
+        "time": {"from": "now-1h", "to": "now"},
+        "refresh": "10s"
+      },
+      "overwrite": true
+    }
+  
+  flask-app-monitoring.json: |-
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Flask Application Monitoring",
+        "tags": ["flask", "application"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "HTTP Request Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(flask_http_requests_total[5m])",
+                "legendFormat": "{{method}} {{endpoint}}",
+                "refId": "A"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+            "fieldConfig": {
+              "defaults": {
+                "unit": "reqps",
+                "color": {"mode": "palette-classic"}
+              }
+            }
+          },
+          {
+            "id": 2,
+            "title": "Request Duration (95th percentile)",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, rate(flask_http_request_duration_seconds_bucket[5m]))",
+                "legendFormat": "{{method}} {{endpoint}}",
+                "refId": "A"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+            "fieldConfig": {
+              "defaults": {
+                "unit": "s",
+                "color": {"mode": "palette-classic"}
+              }
+            }
+          }
+        ],
+        "time": {"from": "now-1h", "to": "now"},
+        "refresh": "10s"
+      },
+      "overwrite": true
+    }

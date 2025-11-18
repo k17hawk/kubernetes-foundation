@@ -18,5 +18,7 @@ data:
         message VARCHAR(255) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE USER IF NOT EXISTS 'exporter'@'%' IDENTIFIED BY 'exporter123' WITH MAX_USER_CONNECTIONS 3;
+    GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'exporter'@'%';
 
     INSERT IGNORE INTO messages (message) VALUES ('Hello from MySQL in Kubernetes!');

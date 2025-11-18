@@ -38,7 +38,7 @@ spec:
         app: mysql-replica-stateful  
         role: replica
     spec:
-      serviceAccountName: mysql-replica-sa  # ← MOVED: This belongs in template.spec
+      serviceAccountName: mysql-replica-sa  
       initContainers:
       - name: wait-for-primary
         image: busybox:1.35
