@@ -1,0 +1,174 @@
+{
+  "uid": "flask-app-monitoring",
+  "title": "Flask Application Monitoring",
+  "tags": ["flask", "application"],
+  "timezone": "browser",
+  "schemaVersion": 16,
+  "version": 0,
+  "refresh": "10s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "HTTP Request Rate",
+      "type": "graph",
+      "targets": [
+        {
+          "expr": "rate(flask_http_requests_total[5m])",
+          "legendFormat": "{{method}} {{endpoint}} {{status}}",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {"mode": "palette-classic"}
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Request Duration (95th percentile)",
+      "type": "graph",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(flask_http_request_duration_seconds_bucket[5m]))",
+          "legendFormat": "{{method}} {{endpoint}}",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {"mode": "palette-classic"}
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "MySQL Connection Status",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "mysql_connection_status",
+          "legendFormat": "{{host}} {{type}}",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 8},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "green", "value": 1}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Message Count",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "flask_messages_total",
+          "legendFormat": "Total Messages",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 8},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {"mode": "continuous-BlPu"}
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Active Requests",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "flask_requests_active",
+          "legendFormat": "Active Requests",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 8},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {"mode": "continuous-BlPu"}
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Database Connections",
+      "type": "graph",
+      "targets": [
+        {
+          "expr": "rate(flask_db_connections_total[5m])",
+          "legendFormat": "{{db_type}} {{status}}",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cps",
+          "color": {"mode": "palette-classic"}
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Database Query Rate",
+      "type": "graph",
+      "targets": [
+        {
+          "expr": "rate(flask_db_queries_total[5m])",
+          "legendFormat": "{{operation}} {{db_type}}",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "color": {"mode": "palette-classic"}
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Read/Write Operations",
+      "type": "graph",
+      "targets": [
+        {
+          "expr": "rate(write_operations_total[5m])",
+          "legendFormat": "Write Ops",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(read_operations_total[5m])",
+          "legendFormat": "Read Ops ({{source}})",
+          "refId": "B"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "color": {"mode": "palette-classic"}
+        }
+      }
+    }
+  ],
+  "time": {"from": "now-1h", "to": "now"}
+}
